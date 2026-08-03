@@ -60,7 +60,12 @@ public class HomeEventsRepository(DbConnectionFactory db, ErrorLogRepository err
                 sql.AppendLine(" AND he.area_id = @AreaId");
                 p.Add("AreaId", filter.AreaId.Value);
             }
-            if (filter.EventStatusId.HasValue)
+            if (filter.EventStatusIds is { Count: > 0 })
+            {
+                sql.AppendLine(" AND he.event_status_id = ANY(@EventStatusIds)");
+                p.Add("EventStatusIds", filter.EventStatusIds.ToArray());
+            }
+            else if (filter.EventStatusId.HasValue)
             {
                 sql.AppendLine(" AND he.event_status_id = @EventStatusId");
                 p.Add("EventStatusId", filter.EventStatusId.Value);

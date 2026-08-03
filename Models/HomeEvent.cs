@@ -12,6 +12,9 @@ public class HomeEvent
 
     public string?   Description   { get; set; }
     public DateOnly? EventDate     { get; set; }
+
+    public bool?    recurring { get; set; }
+    public int?     RecurringMinutes { get; set; }
     public DateOnly? CreatedDate   { get; set; }
     public int?      CreatedById   { get; set; }
     public DateOnly? UpdatedDate   { get; set; }

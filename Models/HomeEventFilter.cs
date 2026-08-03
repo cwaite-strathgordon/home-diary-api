@@ -7,6 +7,7 @@ public class HomeEventFilter
     public int?      EventTypeId         { get; set; }
     public int?      AreaId              { get; set; }
     public int?      EventStatusId       { get; set; }
+    public List<int>? EventStatusIds     { get; set; }
     public int?      CreatedById         { get; set; }
     public DateOnly? EventDateFrom       { get; set; }
     public DateOnly? EventDateTo         { get; set; }
