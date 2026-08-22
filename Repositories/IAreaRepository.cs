@@ -6,6 +6,8 @@ public interface IAreaRepository
 {
     Task<IEnumerable<Area>> GetAllAsync();
     Task<Area?>             GetByIdAsync(int id);
+    Task<bool>              TitleExistsAsync(string title, int? excludingId = null);
+    Task<bool>              IsInUseAsync(int id);
     Task<Area>              CreateAsync(Area area);
     Task<bool>              UpdateAsync(Area area);
     Task<bool>              DeleteAsync(int id);

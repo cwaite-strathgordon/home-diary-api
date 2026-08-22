@@ -1,10 +1,11 @@
 using Dapper;
 using HomeDiary_api.Data;
 using HomeDiary_api.Models;
+using HomeDiary_api.Security;
 
 namespace HomeDiary_api.Repositories;
 
-public class EventContactLinkRepository(DbConnectionFactory db, ErrorLogRepository errorLog) : IEventContactLinkRepository
+public class EventContactLinkRepository(DbConnectionFactory db, ErrorLogRepository errorLog, ClientContext clientContext) : IEventContactLinkRepository
 {
     public async Task<IEnumerable<EventContactLink>> GetByEventIdAsync(int eventId)
     {
@@ -16,10 +17,10 @@ public class EventContactLinkRepository(DbConnectionFactory db, ErrorLogReposito
                 SELECT contact_id,
                        event_id
                   FROM event_contact_link
-                 WHERE event_id = @eventId
+                 WHERE event_id = @eventId AND client_id=@clientId
                  ORDER BY contact_id
                 """,
-                new { eventId });
+                new { eventId, clientId = clientContext.RequireClientId() });
         }
         catch (Exception ex)
         {
@@ -38,10 +39,10 @@ public class EventContactLinkRepository(DbConnectionFactory db, ErrorLogReposito
                 SELECT contact_id,
                        event_id
                   FROM event_contact_link
-                 WHERE contact_id = @contactId
+                 WHERE contact_id = @contactId AND client_id=@clientId
                  ORDER BY event_id
                 """,
-                new { contactId });
+                new { contactId, clientId = clientContext.RequireClientId() });
         }
         catch (Exception ex)
         {
@@ -57,11 +58,13 @@ public class EventContactLinkRepository(DbConnectionFactory db, ErrorLogReposito
             using var conn = db.Create();
             var rows = await conn.ExecuteAsync(
                 """
-                INSERT INTO event_contact_link (contact_id, event_id)
-                VALUES (@ContactId, @EventId)
+                INSERT INTO event_contact_link (client_id, contact_id, event_id)
+                SELECT @clientId, @ContactId, @EventId
+                 WHERE EXISTS (SELECT 1 FROM contact WHERE contact_id=@ContactId AND client_id=@clientId)
+                   AND EXISTS (SELECT 1 FROM home_event WHERE event_id=@EventId AND client_id=@clientId)
                 ON CONFLICT DO NOTHING
                 """,
-                link);
+                new { clientId = clientContext.RequireClientId(), link.ContactId, link.EventId });
             return rows > 0;
         }
         catch (Exception ex)
@@ -81,8 +84,9 @@ public class EventContactLinkRepository(DbConnectionFactory db, ErrorLogReposito
                 DELETE FROM event_contact_link
                  WHERE contact_id = @contactId
                    AND event_id   = @eventId
+                   AND client_id  = @clientId
                 """,
-                new { contactId, eventId });
+                new { contactId, eventId, clientId = clientContext.RequireClientId() });
             return rows > 0;
         }
         catch (Exception ex)

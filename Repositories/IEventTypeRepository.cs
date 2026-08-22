@@ -6,6 +6,8 @@ public interface IEventTypeRepository
 {
     Task<IEnumerable<EventType>> GetAllAsync();
     Task<EventType?>             GetByIdAsync(int id);
+    Task<bool>                   TitleExistsAsync(string title, int? excludingId = null);
+    Task<bool>                   IsInUseAsync(int id);
     Task<EventType>              CreateAsync(EventType type);
     Task<bool>                   UpdateAsync(EventType type);
     Task<bool>                   DeleteAsync(int id);

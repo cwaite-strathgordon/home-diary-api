@@ -12,5 +12,5 @@ public interface IUserRepository
     Task<bool>              UpdateAsync(User user);
     Task<bool>              DeleteAsync(int id);
     Task<bool>              LinkOAuthAsync(int userId, string provider, string oauthId, string? oauthEmail);
-    Task<User>              UpsertFromOAuthAsync(string provider, string oauthId, string email, string? firstName, string? lastName);
+    Task<User>              UpsertFromOAuthAsync(string provider, string oauthId, string? email, string? firstName, string? lastName, bool emailVerified, Guid? invitationToken);
 }

@@ -5,6 +5,8 @@ public class HomeEventDetail : HomeEvent
     public string? EventTypeTitle     { get; set; }
     public string? AreaTitle          { get; set; }
     public string? EventStatusTitle   { get; set; }
+    public string? PriorityTitle      { get; set; }
+    public string? ProjectTitle       { get; set; }
     public string? CreatedByFirstName { get; set; }
     public string? CreatedByLastName  { get; set; }
 }

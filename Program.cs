@@ -1,6 +1,12 @@
 using Dapper;
 using HomeDiary_api.Data;
 using HomeDiary_api.Repositories;
+using HomeDiary_api.Middleware;
+using HomeDiary_api.Services;
+using HomeDiary_api.Security;
+using HomeDiary_api.Configuration;
+using Amazon;
+using Amazon.SimpleEmailV2;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 // ── Dapper: map snake_case DB columns to PascalCase C# properties ─────────
@@ -30,7 +36,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.Audience  = auth0Audience;
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+    options.AddPolicy("HomeDiaryAdmin", policy =>
+        policy.RequireClaim("homediary_admin", "true")));
 
 // ── CORS: allow Angular dev server ────────────────────────────────────────
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>()
@@ -45,14 +53,44 @@ builder.Services.AddCors(options =>
 // ── Application services ──────────────────────────────────────────────────
 builder.Services.AddSingleton(new DbConnectionFactory(connectionString));
 builder.Services.AddSingleton<ErrorLogRepository>();
+builder.Services.AddSingleton<ApplicationParameterProtector>();
+builder.Services.AddScoped<ClientContext>();
+builder.Services.AddOptions<InvitationEmailOptions>()
+    .Bind(builder.Configuration.GetSection(InvitationEmailOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddSingleton<IAmazonSimpleEmailServiceV2>(services =>
+{
+    var options = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<InvitationEmailOptions>>().Value;
+    return new AmazonSimpleEmailServiceV2Client(RegionEndpoint.GetBySystemName(options.Region));
+});
+builder.Services.AddScoped<IInvitationEmailSender, SesInvitationEmailSender>();
 
 builder.Services.AddScoped<IAreaRepository,             AreaRepository>();
+builder.Services.AddScoped<IApplicationParameterRepository, ApplicationParameterRepository>();
 builder.Services.AddScoped<IContactRepository,          ContactRepository>();
+builder.Services.AddScoped<IClientInvitationRepository, ClientInvitationRepository>();
 builder.Services.AddScoped<IEventContactLinkRepository, EventContactLinkRepository>();
+builder.Services.AddScoped<IEventDocumentRepository,    EventDocumentRepository>();
+builder.Services.AddScoped<IEventImageRepository,       EventImageRepository>();
+builder.Services.AddScoped<IEventPriorityRepository,     EventPriorityRepository>();
 builder.Services.AddScoped<IEventStatusRepository,      EventStatusRepository>();
 builder.Services.AddScoped<IEventTypeRepository,        EventTypeRepository>();
+builder.Services.AddScoped<IEmailTriageRepository,      EmailTriageRepository>();
 builder.Services.AddScoped<IHomeEventsRepository,       HomeEventsRepository>();
+builder.Services.AddScoped<IGlobalSearchRepository,     GlobalSearchRepository>();
+builder.Services.AddScoped<INoteRepository,             NoteRepository>();
+builder.Services.AddScoped<IOnboardingRepository,       OnboardingRepository>();
+builder.Services.AddScoped<IProjectRepository,          ProjectRepository>();
+builder.Services.AddScoped<IPropertySettingRepository,  PropertySettingRepository>();
+builder.Services.AddScoped<IRecentItemRepository,       RecentItemRepository>();
 builder.Services.AddScoped<IUserRepository,             UserRepository>();
+builder.Services.AddSingleton<DocumentTextExtractor>();
+builder.Services.AddHttpClient<PropertyExternalService>(client =>
+{
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("HomeDiary/1.0 (local property management application)");
+    client.Timeout = TimeSpan.FromSeconds(12);
+});
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
@@ -63,9 +101,14 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
-app.UseHttpsRedirection();
+// Local development normally serves the API over HTTP and has no HTTPS port
+// configured. Redirect only outside Development so ASP.NET does not emit
+// "Failed to determine the https port for redirect" on every local request.
+if (!app.Environment.IsDevelopment())
+    app.UseHttpsRedirection();
 app.UseCors();
 app.UseAuthentication();
+app.UseMiddleware<HomeDiaryUserAccessMiddleware>();
 app.UseAuthorization();
 
 // All controller endpoints require a valid Auth0 JWT

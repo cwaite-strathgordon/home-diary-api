@@ -1,10 +1,11 @@
 using Dapper;
 using HomeDiary_api.Data;
 using HomeDiary_api.Models;
+using HomeDiary_api.Security;
 
 namespace HomeDiary_api.Repositories;
 
-public class AreaRepository(DbConnectionFactory db, ErrorLogRepository errorLog) : IAreaRepository
+public class AreaRepository(DbConnectionFactory db, ErrorLogRepository errorLog, ClientContext clientContext) : IAreaRepository
 {
     public async Task<IEnumerable<Area>> GetAllAsync()
     {
@@ -17,8 +18,9 @@ public class AreaRepository(DbConnectionFactory db, ErrorLogRepository errorLog)
                        title,
                        description
                   FROM area
+                 WHERE client_id = @clientId
                  ORDER BY title
-                """);
+                """, new { clientId = clientContext.RequireClientId() });
         }
         catch (Exception ex)
         {
@@ -38,15 +40,33 @@ public class AreaRepository(DbConnectionFactory db, ErrorLogRepository errorLog)
                        title,
                        description
                   FROM area
-                 WHERE area_id = @id
+                 WHERE area_id = @id AND client_id = @clientId
                 """,
-                new { id });
+                new { id, clientId = clientContext.RequireClientId() });
         }
         catch (Exception ex)
         {
             await errorLog.LogAsync(ex.Message, ex.StackTrace, nameof(AreaRepository));
             throw;
         }
+    }
+
+    public async Task<bool> TitleExistsAsync(string title, int? excludingId = null)
+    {
+        using var conn = db.Create();
+        return await conn.ExecuteScalarAsync<bool>(
+            excludingId.HasValue
+                ? "SELECT EXISTS (SELECT 1 FROM area WHERE client_id = @clientId AND LOWER(title) = LOWER(@title) AND area_id <> @excludingId)"
+                : "SELECT EXISTS (SELECT 1 FROM area WHERE client_id = @clientId AND LOWER(title) = LOWER(@title))",
+            new { title, excludingId, clientId = clientContext.RequireClientId() });
+    }
+
+    public async Task<bool> IsInUseAsync(int id)
+    {
+        using var conn = db.Create();
+        return await conn.ExecuteScalarAsync<bool>(
+            "SELECT EXISTS (SELECT 1 FROM home_event WHERE area_id = @id AND client_id = @clientId)",
+            new { id, clientId = clientContext.RequireClientId() });
     }
 
     public async Task<Area> CreateAsync(Area area)
@@ -56,11 +76,11 @@ public class AreaRepository(DbConnectionFactory db, ErrorLogRepository errorLog)
             using var conn = db.Create();
             area.AreaId = await conn.QuerySingleAsync<int>(
                 """
-                INSERT INTO area (title, description)
-                VALUES (@Title, @Description)
+                INSERT INTO area (client_id, title, description)
+                VALUES (@clientId, @Title, @Description)
                 RETURNING area_id
                 """,
-                area);
+                new { clientId = clientContext.RequireClientId(), area.Title, area.Description });
             return area;
         }
         catch (Exception ex)
@@ -80,9 +100,9 @@ public class AreaRepository(DbConnectionFactory db, ErrorLogRepository errorLog)
                 UPDATE area
                    SET title       = @Title,
                        description = @Description
-                 WHERE area_id = @AreaId
+                 WHERE area_id = @AreaId AND client_id = @clientId
                 """,
-                area);
+                new { area.AreaId, area.Title, area.Description, clientId = clientContext.RequireClientId() });
             return rows > 0;
         }
         catch (Exception ex)
@@ -100,9 +120,9 @@ public class AreaRepository(DbConnectionFactory db, ErrorLogRepository errorLog)
             var rows = await conn.ExecuteAsync(
                 """
                 DELETE FROM area
-                 WHERE area_id = @id
+                 WHERE area_id = @id AND client_id = @clientId
                 """,
-                new { id });
+                new { id, clientId = clientContext.RequireClientId() });
             return rows > 0;
         }
         catch (Exception ex)

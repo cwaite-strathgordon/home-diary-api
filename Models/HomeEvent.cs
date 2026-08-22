@@ -5,6 +5,7 @@ namespace HomeDiary_api.Models;
 public class HomeEvent
 {
     public int EventId { get; set; }
+    public int ClientId { get; set; }
 
     [Required(ErrorMessage = "Title is required.")]
     [MaxLength(255, ErrorMessage = "Title cannot exceed 255 characters.")]
@@ -13,8 +14,11 @@ public class HomeEvent
     public string?   Description   { get; set; }
     public DateOnly? EventDate     { get; set; }
 
-    public bool?    recurring { get; set; }
-    public int?     RecurringMinutes { get; set; }
+    public DateOnly? TargetCompletionDate { get; set; }
+    public DateOnly? ActualCompletionDate { get; set; }
+    public bool IsRecurring { get; set; }
+    public int? RecurrenceInterval { get; set; }
+    public string? RecurrenceUnit { get; set; }
     public DateOnly? CreatedDate   { get; set; }
     public int?      CreatedById   { get; set; }
     public DateOnly? UpdatedDate   { get; set; }
@@ -27,4 +31,9 @@ public class HomeEvent
 
     [Required(ErrorMessage = "EventStatusId is required.")]
     public int? EventStatusId { get; set; }
+
+    [Required(ErrorMessage = "PriorityId is required.")]
+    public int? PriorityId { get; set; }
+
+    public int? ProjectId { get; set; }
 }
