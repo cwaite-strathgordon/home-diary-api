@@ -6,9 +6,11 @@ namespace HomeDiary_api.Controllers;
 
 [ApiController]
 [Route("api/event-images")]
-public class EventImageController(IEventImageRepository repo) : ControllerBase
+public class EventImageController(
+    IEventImageRepository repo,
+    IApplicationParameterRepository applicationParameters) : ControllerBase
 {
-    private const long MaxFileSize = 20 * 1024 * 1024;
+    private const long AbsoluteMaxRequestSize = 25 * 1024 * 1024;
     private static readonly Dictionary<string, string> AllowedTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         [".jpg"] = "image/jpeg",
@@ -35,12 +37,15 @@ public class EventImageController(IEventImageRepository repo) : ControllerBase
 
     [HttpPost("by-event/{eventId:int}")]
     [Consumes("multipart/form-data")]
-    [RequestSizeLimit(MaxFileSize)]
+    [RequestSizeLimit(AbsoluteMaxRequestSize)]
     public async Task<ActionResult<EventImage>> Upload(int eventId, IFormFile file)
     {
         if (!await repo.EventExistsAsync(eventId)) return NotFound("Event not found.");
-        if (file.Length is <= 0 or > MaxFileSize)
-            return BadRequest("Images must be between 1 byte and 20 MB.");
+        var settings = await applicationParameters.GetApplicationSettingsAsync();
+        var maxFileSize = settings.MaximumImageUploadMegabytes * 1024L * 1024L;
+        if (file.Length is <= 0 || file.Length > maxFileSize)
+            return BadRequest(
+                $"Images must be between 1 byte and {settings.MaximumImageUploadMegabytes} MB.");
 
         var fileName = Path.GetFileName(file.FileName);
         var extension = Path.GetExtension(fileName);
