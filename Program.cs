@@ -20,23 +20,26 @@ var builder = WebApplication.CreateBuilder(args);
 var baseConnectionString = builder.Configuration.GetConnectionString("HomeDiary")
     ?? throw new InvalidOperationException("Connection string 'HomeDiary' is missing.");
 
-var dbPassword = builder.Environment.IsProduction()
-    ? builder.Configuration["Database:Password"]
-    : builder.Configuration["DbPassword"];
+var connectionStringBuilder = new NpgsqlConnectionStringBuilder(baseConnectionString);
 
-if (string.IsNullOrWhiteSpace(dbPassword))
+if (string.IsNullOrWhiteSpace(connectionStringBuilder.Password))
 {
-    var message = builder.Environment.IsProduction()
-        ? "Database password is missing. Set the Database__Password environment variable."
-        : "DbPassword secret is missing. Run: dotnet user-secrets set \"DbPassword\" \"<password>\"";
+    var dbPassword = builder.Environment.IsProduction()
+        ? builder.Configuration["Database:Password"]
+        : builder.Configuration["DbPassword"];
 
-    throw new InvalidOperationException(message);
+    if (string.IsNullOrWhiteSpace(dbPassword))
+    {
+        var message = builder.Environment.IsProduction()
+            ? "Database password is missing. Include it in ConnectionStrings__HomeDiary or set Database__Password."
+            : "DbPassword secret is missing. Run: dotnet user-secrets set \"DbPassword\" \"<password>\"";
+
+        throw new InvalidOperationException(message);
+    }
+
+    connectionStringBuilder.Password = dbPassword;
 }
 
-var connectionStringBuilder = new NpgsqlConnectionStringBuilder(baseConnectionString)
-{
-    Password = dbPassword
-};
 var connectionString = connectionStringBuilder.ConnectionString;
 
 // ── Auth0 JWT bearer authentication ──────────────────────────────────────
