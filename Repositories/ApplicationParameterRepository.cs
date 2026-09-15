@@ -73,15 +73,31 @@ public sealed class ApplicationParameterRepository(
         try
         {
             using var conn = db.Create();
-            var raw = await conn.QuerySingleOrDefaultAsync<string>(
+            var rows = await conn.QueryAsync<ParameterRow>(
                 """
-                SELECT parameter_value
+                SELECT parameter_key, parameter_value, parameter_type
                   FROM application_parameter
-                 WHERE client_id=@clientId AND parameter_key='recent_items.limit'
+                 WHERE client_id=@clientId
+                   AND parameter_key IN (
+                       'recent_items.limit',
+                       'email.inbound_address',
+                       'image.max_upload_mb')
                 """, new { clientId = clientContext.RequireClientId() });
+            var values = rows.ToDictionary(row => row.ParameterKey, StringComparer.OrdinalIgnoreCase);
+            values.TryGetValue("recent_items.limit", out var recentItems);
+            values.TryGetValue("email.inbound_address", out var inboundEmail);
+            values.TryGetValue("image.max_upload_mb", out var imageUploadLimit);
             return new ApplicationSettings
             {
-                RecentItemsLimit = int.TryParse(raw, out var value) ? Math.Clamp(value, 1, 100) : 20
+                RecentItemsLimit = int.TryParse(recentItems?.ParameterValue, out var value)
+                    ? Math.Clamp(value, 1, 100)
+                    : 20,
+                InboundEmailAddress = string.IsNullOrWhiteSpace(inboundEmail?.ParameterValue)
+                    ? "tasks@homediary.app"
+                    : inboundEmail.ParameterValue,
+                MaximumImageUploadMegabytes = int.TryParse(imageUploadLimit?.ParameterValue, out var imageLimit)
+                    ? Math.Clamp(imageLimit, 1, 20)
+                    : 3
             };
         }
         catch (Exception ex)
@@ -102,6 +118,10 @@ public sealed class ApplicationParameterRepository(
             conn.Open();
             using var transaction = conn.BeginTransaction();
             await UpsertAsync(conn, transaction, "recent_items.limit", limit.ToString(), "integer", updatedById);
+            var inboundEmailAddress = request.InboundEmailAddress.Trim().ToLowerInvariant();
+            await UpsertAsync(conn, transaction, "email.inbound_address", inboundEmailAddress, "string", updatedById);
+            var imageUploadLimit = Math.Clamp(request.MaximumImageUploadMegabytes, 1, 20);
+            await UpsertAsync(conn, transaction, "image.max_upload_mb", imageUploadLimit.ToString(), "integer", updatedById);
             await conn.ExecuteAsync(
                 """
                 DELETE FROM recent_item_view
@@ -119,7 +139,12 @@ public sealed class ApplicationParameterRepository(
                         WHERE position > @limit)
                 """, new { clientId = clientContext.RequireClientId(), limit }, transaction);
             transaction.Commit();
-            return new ApplicationSettings { RecentItemsLimit = limit };
+            return new ApplicationSettings
+            {
+                RecentItemsLimit = limit,
+                InboundEmailAddress = inboundEmailAddress,
+                MaximumImageUploadMegabytes = imageUploadLimit
+            };
         }
         catch (Exception ex)
         {

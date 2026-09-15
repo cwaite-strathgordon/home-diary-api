@@ -7,16 +7,18 @@ using Microsoft.AspNetCore.Mvc;
 namespace HomeDiary_api.Controllers;
 
 [ApiController]
-[Authorize(Policy = "HomeDiaryAdmin")]
+[Authorize]
 [Route("api/application-parameters")]
 public sealed class ApplicationParametersController(IApplicationParameterRepository repository)
     : ControllerBase
 {
     [HttpGet("ai")]
+    [Authorize(Policy = "HomeDiaryAdmin")]
     public async Task<ActionResult<AiSettings>> GetAiSettings() =>
         Ok(await repository.GetAiSettingsAsync());
 
     [HttpPut("ai")]
+    [Authorize(Policy = "HomeDiaryAdmin")]
     public async Task<ActionResult<AiSettings>> UpdateAiSettings(UpdateAiSettingsRequest request)
     {
         if (request.ParallelEnabled &&
@@ -31,6 +33,7 @@ public sealed class ApplicationParametersController(IApplicationParameterReposit
         Ok(await repository.GetApplicationSettingsAsync());
 
     [HttpPut("application")]
+    [Authorize(Policy = "HomeDiaryAdmin")]
     public async Task<ActionResult<ApplicationSettings>> UpdateApplicationSettings(
         UpdateApplicationSettingsRequest request) =>
         Ok(await repository.UpdateApplicationSettingsAsync(request, GetCurrentUserId()));

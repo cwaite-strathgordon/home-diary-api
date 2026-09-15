@@ -8,6 +8,7 @@ using HomeDiary_api.Configuration;
 using Amazon;
 using Amazon.SimpleEmailV2;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Npgsql;
 
 // ── Dapper: map snake_case DB columns to PascalCase C# properties ─────────
 DefaultTypeMap.MatchNamesWithUnderscores = true;
@@ -15,15 +16,28 @@ SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Connection string — password stored in dotnet user-secrets ────────────
+// ── Connection string ─────────────────────────────────────────────────────
 var baseConnectionString = builder.Configuration.GetConnectionString("HomeDiary")
     ?? throw new InvalidOperationException("Connection string 'HomeDiary' is missing.");
 
-var dbPassword = builder.Configuration["DbPassword"]
-    ?? throw new InvalidOperationException(
-        "DbPassword secret is missing. Run: dotnet user-secrets set \"DbPassword\" \"<password>\"");
+var dbPassword = builder.Environment.IsProduction()
+    ? builder.Configuration["Database:Password"]
+    : builder.Configuration["DbPassword"];
 
-var connectionString = baseConnectionString + $"Password={dbPassword};";
+if (string.IsNullOrWhiteSpace(dbPassword))
+{
+    var message = builder.Environment.IsProduction()
+        ? "Database password is missing. Set the Database__Password environment variable."
+        : "DbPassword secret is missing. Run: dotnet user-secrets set \"DbPassword\" \"<password>\"";
+
+    throw new InvalidOperationException(message);
+}
+
+var connectionStringBuilder = new NpgsqlConnectionStringBuilder(baseConnectionString)
+{
+    Password = dbPassword
+};
+var connectionString = connectionStringBuilder.ConnectionString;
 
 // ── Auth0 JWT bearer authentication ──────────────────────────────────────
 var auth0Domain   = builder.Configuration["Auth0:Domain"]!;

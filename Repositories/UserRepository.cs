@@ -12,7 +12,7 @@ public class UserRepository(DbConnectionFactory db, ErrorLogRepository errorLog,
         SELECT u.user_id,
                u.client_id,
                c.name AS client_name,
-               c.inbound_email_address,
+               inbound_email.parameter_value AS inbound_email_address,
                first_name,
                last_name,
                email,
@@ -25,6 +25,9 @@ public class UserRepository(DbConnectionFactory db, ErrorLogRepository errorLog,
                u.last_login_at
           FROM app_user u
           LEFT JOIN client c ON c.client_id = u.client_id
+          LEFT JOIN application_parameter inbound_email
+            ON inbound_email.client_id = u.client_id
+           AND inbound_email.parameter_key = 'email.inbound_address'
         """;
 
     public async Task<IEnumerable<User>> GetAllAsync()

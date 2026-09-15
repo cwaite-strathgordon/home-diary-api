@@ -7,6 +7,8 @@ namespace HomeDiary_api.Repositories;
 
 public sealed class OnboardingRepository(DbConnectionFactory db) : IOnboardingRepository
 {
+    private const string InboundEmailAddress = "tasks@homediary.app";
+
     public async Task<OnboardingSuggestions> GetSuggestionsAsync(OnboardingSuggestionRequest request)
     {
         var features = Features(request);
@@ -72,11 +74,6 @@ public sealed class OnboardingRepository(DbConnectionFactory db) : IOnboardingRe
         var clientId = await conn.QuerySingleAsync<int>(new CommandDefinition(
             "INSERT INTO client(name) VALUES (@name) RETURNING client_id",
             new { name = request.ClientName.Trim() }, transaction, cancellationToken: cancellationToken));
-        var inboundEmailAddress = $"tasks-{clientId}@tasks.homediary.app";
-        await conn.ExecuteAsync(new CommandDefinition(
-            "UPDATE client SET inbound_email_address=@inboundEmailAddress WHERE client_id=@clientId",
-            new { clientId, inboundEmailAddress }, transaction, cancellationToken: cancellationToken));
-
         await conn.ExecuteAsync(new CommandDefinition(
             """
             UPDATE app_user
@@ -133,9 +130,14 @@ public sealed class OnboardingRepository(DbConnectionFactory db) : IOnboardingRe
               (@clientId, 'ai.openai.model', 'gpt-5.6-sol', 'string', 'OpenAI model.'),
               (@clientId, 'ai.deepseek.model', 'deepseek-v4-flash', 'string', 'DeepSeek model.'),
               (@clientId, 'ai.openai.api_key', NULL, 'secret', 'Encrypted OpenAI API key.'),
-              (@clientId, 'ai.deepseek.api_key', NULL, 'secret', 'Encrypted DeepSeek API key.')
+              (@clientId, 'ai.deepseek.api_key', NULL, 'secret', 'Encrypted DeepSeek API key.'),
+              (@clientId, 'email.inbound_address', @inboundEmailAddress, 'string',
+               'Shared address for inbound HomeDiary task email.'),
+              (@clientId, 'image.max_upload_mb', '3', 'integer',
+               'Maximum size in megabytes for an uploaded image.')
             ON CONFLICT DO NOTHING
-            """, new { clientId }, transaction, cancellationToken: cancellationToken));
+            """, new { clientId, inboundEmailAddress = InboundEmailAddress }, transaction,
+            cancellationToken: cancellationToken));
 
         foreach (var area in request.Areas.Where(x => x.Selected && !string.IsNullOrWhiteSpace(x.Title))
                      .DistinctBy(x => x.Title.Trim(), StringComparer.OrdinalIgnoreCase))
@@ -187,7 +189,7 @@ public sealed class OnboardingRepository(DbConnectionFactory db) : IOnboardingRe
         return new User
         {
             UserId = userId, ClientId = clientId, ClientName = request.ClientName.Trim(),
-            InboundEmailAddress = inboundEmailAddress,
+            InboundEmailAddress = InboundEmailAddress,
             FirstName = request.FirstName.Trim(), LastName = request.LastName.Trim(),
             Email = request.Email.Trim(), MobileNumber = Clean(request.MobileNumber), Admin = true
         };
